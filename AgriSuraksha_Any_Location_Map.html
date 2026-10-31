@@ -1,0 +1,1646 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgriSuraksha - KISAN RAKSHAK | PC Dashboard</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brandDark: '#080f0b',
+            cardDark: '#122019',
+            cardBorder: '#1f382a',
+            accentGreen: '#10b981',
+            accentOrange: '#f59e0b',
+            accentRed: '#ef4444',
+            accentBlue: '#06b6d4',
+            accentYellow: '#eab308'
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+  <!-- Firebase Realtime Database: shared live data across devices/users -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Google Fonts Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- PC / Laptop presentation enhancements -->
+  <style id="pc-layout-enhancements">
+    @media (min-width: 1024px) {
+      body { min-width: 980px; }
+      header > div, main, section.bg-cardDark\/60 > div, footer > div { max-width: 1600px !important; }
+      main { padding-left: 28px !important; padding-right: 28px !important; }
+      #section-map .relative.w-full.h-\[450px\] { height: 620px !important; }
+      #map { min-height: 620px; }
+      .glass-card { box-shadow: 0 12px 28px rgba(0,0,0,.22); }
+      #tabNav button { white-space: nowrap; }
+    }
+    @media (min-width: 1440px) {
+      main { padding-top: 28px !important; }
+      #section-map .relative.w-full.h-\[450px\] { height: 700px !important; }
+      #map { min-height: 700px; }
+    }
+    @media print {
+      header, #sirenBtn, #toggleMotionBtn, #toggleRadarBtn, button { print-color-adjust: exact; }
+    }
+  </style>
+
+
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #080f0b;
+      color: #e2e8f0;
+    }
+    
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0b140f;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #1f382a;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #10b981;
+    }
+
+    /* Glassmorphism Card Style */
+    .glass-card {
+      background: rgba(18, 32, 25, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(31, 56, 42, 0.9);
+    }
+    .glass-card:hover {
+      border-color: rgba(16, 185, 129, 0.4);
+    }
+
+    /* Glows */
+    .glow-red { box-shadow: 0 0 15px rgba(239, 68, 68, 0.4); }
+    .glow-orange { box-shadow: 0 0 15px rgba(245, 158, 11, 0.4); }
+    .glow-green { box-shadow: 0 0 15px rgba(16, 185, 129, 0.4); }
+    
+    /* Custom Tab Indicator */
+    .active-tab {
+      border-bottom: 3px solid #10b981;
+      color: #10b981;
+      background: rgba(16, 185, 129, 0.1);
+    }
+
+    /* Leaflet Dark Tile Styling Filter & Map Enhancements */
+    .leaflet-tile-pane {
+      filter: brightness(0.65) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7);
+    }
+
+    .leaflet-container {
+      background: #080f0b !important;
+      font-family: 'Inter', sans-serif !important;
+    }
+
+    .leaflet-popup-content-wrapper, .leaflet-popup-tip {
+      background: #122019 !important;
+      color: #e2e8f0 !important;
+      border: 1px solid #1f382a;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.8);
+      border-radius: 12px !important;
+    }
+    .leaflet-popup-content {
+      margin: 12px 14px !important;
+      font-size: 12px !important;
+    }
+
+    /* Animated Map Radar Sweep Overlay */
+    @keyframes radar-sweep {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .radar-container {
+      pointer-events: none;
+      position: absolute;
+      inset: 0;
+      z-index: 400;
+      overflow: hidden;
+      border-radius: 0.75rem;
+    }
+    .radar-sweep-line {
+      position: absolute;
+      width: 200%;
+      height: 200%;
+      top: -50%;
+      left: -50%;
+      background: conic-gradient(from 0deg, rgba(16, 185, 129, 0.18) 0deg, rgba(16, 185, 129, 0) 60deg, transparent 360deg);
+      animation: radar-sweep 6s linear infinite;
+      transform-origin: center center;
+    }
+
+    /* Custom Pulsing Markers */
+    .moving-farmer-icon {
+      transition: all 0.3s ease-out;
+    }
+    .pulse-ring-hazard {
+      border: 2px solid #f59e0b;
+      border-radius: 50%;
+      height: 100%;
+      width: 100%;
+      position: absolute;
+      animation: pulse-ring 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.3); opacity: 0.8; }
+      80%, 100% { transform: scale(2.2); opacity: 0; }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between antialiased selection:bg-emerald-500 selection:text-white">
+
+  <!-- TOP HEADER / NAVBAR -->
+  <header class="bg-cardDark border-b border-cardBorder sticky top-0 z-50 px-4 py-3 shadow-lg">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+      
+      <!-- Brand & Badges -->
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-amber-500 to-yellow-300 flex items-center justify-center text-black font-black text-2xl shadow-md glow-orange">
+          ⚡
+        </div>
+        <div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <h1 class="text-xl sm:text-2xl font-black tracking-tight text-white flex items-center gap-2">
+              AgriSuraksha
+            </h1>
+            <span class="bg-gradient-to-r from-amber-700 to-amber-600 text-amber-100 text-xs font-extrabold px-2.5 py-0.5 rounded-md border border-amber-500 uppercase tracking-wider">
+              KISAN RAKSHAK
+            </span>
+            <!-- Live Database Connection Status -->
+            <span class="inline-flex items-center gap-1.5 bg-emerald-950/80 text-emerald-400 text-xs px-2.5 py-0.5 rounded-full border border-emerald-700/60 font-mono">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+              MySQL 8.0 & GIS Live
+            </span>
+            <span id="sharedSyncStatus" class="inline-flex items-center gap-1.5 bg-amber-950/80 text-amber-300 text-xs px-2.5 py-0.5 rounded-full border border-amber-700/60 font-mono">
+              <span class="w-2 h-2 rounded-full bg-amber-400"></span>
+              Shared sync: setup needed
+            </span>
+          </div>
+          <p class="text-xs text-emerald-400/80 font-medium hidden sm:block">
+            Lightning & Flood Early Warning Registry with Dynamic Spatial Tracking
+          </p>
+        </div>
+      </div>
+
+      <!-- Quick Actions / Mobile Menu Toggle -->
+      <div class="flex items-center gap-2">
+        <button id="sirenBtn" onclick="toggleSiren()" class="px-3 py-1.5 rounded-lg bg-red-950/60 border border-red-700/60 text-red-300 hover:bg-red-900/50 text-xs font-bold transition flex items-center gap-2">
+          <i id="sirenIcon" class="fa-solid fa-bell-slash"></i>
+          <span id="sirenStatus">Siren Sound: OFF</span>
+        </button>
+
+        <button onclick="toggleMobileNav()" class="md:hidden p-2 rounded-lg bg-cardBorder text-gray-300 hover:text-white">
+          <i class="fa-solid fa-bars text-lg"></i>
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- CONTROL SIMULATION BAR -->
+  <section class="bg-cardDark/60 border-b border-cardBorder px-4 py-2.5">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center gap-2 justify-between">
+      
+      <!-- Simulation Triggers -->
+      <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+        <span class="text-xs font-bold uppercase tracking-wider text-gray-400 mr-1 hidden xl:inline-block">Simulate Hazard:</span>
+        <button onclick="triggerSimulation('UP_LIGHTNING')" class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-black font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow-md active:scale-95">
+          ⚡ Sim Lightning (UP)
+        </button>
+        <button onclick="triggerSimulation('GHATAL_FLOOD')" class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow-md active:scale-95">
+          🌊 Sim Ghatal Flood (WB)
+        </button>
+        <button onclick="triggerSimulation('BANKURA_STRIKE')" class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-yellow-600 hover:bg-yellow-500 text-black font-extrabold text-xs transition flex items-center justify-center gap-1.5 shadow-md active:scale-95">
+          ⚡ Sim Bankura Strike (WB)
+        </button>
+      </div>
+
+      <!-- DBMS Action Triggers -->
+      <div class="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
+        <button onclick="openRegisterModal()" class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 border border-emerald-500/50 shadow">
+          <i class="fa-solid fa-user-plus"></i> + Register Farmer
+        </button>
+        <button onclick="openBroadcastModal()" class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white font-bold text-xs transition flex items-center justify-center gap-1.5 shadow glow-red">
+          <i class="fa-solid fa-bullhorn"></i> 📢 Broadcast Alert
+        </button>
+        <button onclick="triggerSOS()" class="flex-1 sm:flex-none px-3 py-1.5 rounded-lg bg-red-900 hover:bg-red-800 text-red-200 font-extrabold text-xs border border-red-500/50 transition flex items-center justify-center gap-1.5 shadow animate-pulse">
+          🚨 SOS Distress
+        </button>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- MAIN CONTENT CONTAINER -->
+  <main class="max-w-7xl w-full mx-auto px-4 py-5 flex-1 space-y-6">
+
+    <!-- METRICS DASHBOARD CARDS -->
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+      
+      <!-- Card 1 -->
+      <div class="glass-card rounded-2xl p-3.5 flex flex-col justify-between relative overflow-hidden group">
+        <div class="flex items-center justify-between text-gray-400">
+          <span class="text-xs font-medium">Registered Farmers</span>
+          <div class="w-8 h-8 rounded-lg bg-emerald-950/80 border border-emerald-800/50 flex items-center justify-center text-emerald-400 text-sm">
+            🧑‍🌾
+          </div>
+        </div>
+        <div class="mt-3">
+          <span id="metricFarmers" class="text-2xl sm:text-3xl font-extrabold text-white">0</span>
+          <span class="text-[10px] text-emerald-400 block font-mono">DB Table: `farmers`</span>
+        </div>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="glass-card rounded-2xl p-3.5 flex flex-col justify-between relative overflow-hidden">
+        <div class="flex items-center justify-between text-gray-400">
+          <span class="text-xs font-medium">Farmers In Field / Moving</span>
+          <div class="w-8 h-8 rounded-lg bg-amber-950/80 border border-amber-800/50 flex items-center justify-center text-amber-400 text-sm">
+            🏃
+          </div>
+        </div>
+        <div class="mt-3">
+          <span id="metricInRisk" class="text-2xl sm:text-3xl font-extrabold text-amber-400">0</span>
+          <span class="text-[10px] text-amber-500/80 block font-mono">Live Patrol Tracking</span>
+        </div>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="glass-card rounded-2xl p-3.5 flex flex-col justify-between relative overflow-hidden">
+        <div class="flex items-center justify-between text-gray-400">
+          <span class="text-xs font-medium">Active Weather Alerts</span>
+          <div class="w-8 h-8 rounded-lg bg-red-950/80 border border-red-800/50 flex items-center justify-center text-red-400 text-sm">
+            📢
+          </div>
+        </div>
+        <div class="mt-3">
+          <span id="metricAlerts" class="text-2xl sm:text-3xl font-extrabold text-red-400">0</span>
+          <span class="text-[10px] text-red-400/80 block font-mono">Live Dispatches</span>
+        </div>
+      </div>
+
+      <!-- Card 4 -->
+      <div class="glass-card rounded-2xl p-3.5 flex flex-col justify-between relative overflow-hidden">
+        <div class="flex items-center justify-between text-gray-400">
+          <span class="text-xs font-medium">SMS / WA Dispatches</span>
+          <div class="w-8 h-8 rounded-lg bg-cyan-950/80 border border-cyan-800/50 flex items-center justify-center text-cyan-400 text-sm">
+            💬
+          </div>
+        </div>
+        <div class="mt-3">
+          <span id="metricDispatches" class="text-2xl sm:text-3xl font-extrabold text-cyan-400">0</span>
+          <span class="text-[10px] text-cyan-400/80 block font-mono">Twilio API Logs</span>
+        </div>
+      </div>
+
+      <!-- Card 5 -->
+      <div class="glass-card rounded-2xl p-3.5 flex flex-col justify-between relative overflow-hidden">
+        <div class="flex items-center justify-between text-gray-400">
+          <span class="text-xs font-medium">Pending SOS Calls</span>
+          <div class="w-8 h-8 rounded-lg bg-red-950/80 border border-red-800/50 flex items-center justify-center text-red-500 text-sm animate-bounce">
+            🆘
+          </div>
+        </div>
+        <div class="mt-3">
+          <span id="metricSos" class="text-2xl sm:text-3xl font-extrabold text-red-500">0</span>
+          <span class="text-[10px] text-red-400/80 block font-mono">Requires Dispatch</span>
+        </div>
+      </div>
+
+      <!-- Card 6 -->
+      <div class="glass-card rounded-2xl p-3.5 flex flex-col justify-between relative overflow-hidden">
+        <div class="flex items-center justify-between text-gray-400">
+          <span class="text-xs font-medium">Safe Shelter Capacity</span>
+          <div class="w-8 h-8 rounded-lg bg-emerald-950/80 border border-emerald-800/50 flex items-center justify-center text-emerald-400 text-sm">
+            🏛️
+          </div>
+        </div>
+        <div class="mt-3">
+          <span id="metricShelter" class="text-2xl sm:text-3xl font-extrabold text-emerald-400">12,450</span>
+          <span class="text-[10px] text-emerald-400/80 block font-mono">Available Spaces</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- NAVIGATION TABS -->
+    <div class="border-b border-cardBorder overflow-x-auto">
+      <nav class="flex space-x-2 min-w-max pb-1" id="tabNav">
+        <button onclick="switchTab('map')" id="tab-map" class="active-tab px-4 py-2.5 rounded-t-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition">
+          🗺️ Live Dynamic OpenStreetMap
+        </button>
+        <button onclick="switchTab('farmers')" id="tab-farmers" class="px-4 py-2.5 rounded-t-xl font-semibold text-xs sm:text-sm text-gray-400 hover:text-white flex items-center gap-2 transition">
+          🧑‍🌾 Farmer Registry (DBMS)
+        </button>
+        <button onclick="switchTab('broadcast')" id="tab-broadcast" class="px-4 py-2.5 rounded-t-xl font-semibold text-xs sm:text-sm text-gray-400 hover:text-white flex items-center gap-2 transition">
+          📢 Emergency Alerts & Broadcast
+        </button>
+        <button onclick="switchTab('telemetry')" id="tab-telemetry" class="px-4 py-2.5 rounded-t-xl font-semibold text-xs sm:text-sm text-gray-400 hover:text-white flex items-center gap-2 transition">
+          📡 Sensor Telemetry
+        </button>
+        <button onclick="switchTab('shelters')" id="tab-shelters" class="px-4 py-2.5 rounded-t-xl font-semibold text-xs sm:text-sm text-gray-400 hover:text-white flex items-center gap-2 transition">
+          🏛️ Safe Shelters
+        </button>
+        <button onclick="switchTab('sos')" id="tab-sos" class="px-4 py-2.5 rounded-t-xl font-semibold text-xs sm:text-sm text-gray-400 hover:text-white flex items-center gap-2 transition">
+          🆘 SOS Distress Hub
+        </button>
+        <button onclick="switchTab('audit')" id="tab-audit" class="px-4 py-2.5 rounded-t-xl font-semibold text-xs sm:text-sm text-gray-400 hover:text-white flex items-center gap-2 transition">
+          📑 Dispatch Simulator & Audit
+        </button>
+      </nav>
+    </div>
+
+    <!-- TAB 1: DYNAMIC LEAFLET MAP SECTION -->
+    <section id="section-map" class="space-y-4">
+      <div class="glass-card rounded-2xl p-4 sm:p-5 relative">
+        
+        <!-- Map Overlay Control Panel -->
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-4 pb-3 border-b border-cardBorder">
+          
+          <!-- Layer & Movement Toggles -->
+          <div class="flex flex-wrap items-center gap-3 text-xs font-semibold">
+            <span class="text-gray-400 uppercase tracking-wider font-bold">Layers:</span>
+            <label class="flex items-center gap-1.5 cursor-pointer bg-cardDark/80 px-2.5 py-1 rounded border border-cardBorder hover:border-emerald-500">
+              <input type="checkbox" id="layerFarmers" checked onchange="toggleMapLayers()" class="accent-emerald-500 rounded">
+              <span>🧑‍🌾 Farmers</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer bg-cardDark/80 px-2.5 py-1 rounded border border-cardBorder hover:border-amber-500">
+              <input type="checkbox" id="layerHazards" checked onchange="toggleMapLayers()" class="accent-amber-500 rounded">
+              <span>⚡ Hazard Zones</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer bg-cardDark/80 px-2.5 py-1 rounded border border-cardBorder hover:border-cyan-500">
+              <input type="checkbox" id="layerTelemetry" checked onchange="toggleMapLayers()" class="accent-cyan-500 rounded">
+              <span>📡 Sensors</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer bg-cardDark/80 px-2.5 py-1 rounded border border-cardBorder hover:border-emerald-400">
+              <input type="checkbox" id="layerShelters" checked onchange="toggleMapLayers()" class="accent-emerald-400 rounded">
+              <span>🏛️ Shelters</span>
+            </label>
+
+            <span class="text-gray-600">|</span>
+
+            <!-- Live Movement Motion Toggle -->
+            <button id="toggleMotionBtn" onclick="toggleFarmerMovement()" class="px-2.5 py-1 rounded bg-amber-950/80 border border-amber-600 text-amber-300 hover:bg-amber-900 font-bold flex items-center gap-1.5">
+              <i id="motionIcon" class="fa-solid fa-person-walking animate-pulse"></i>
+              <span id="motionBtnText">Movement Engine: ACTIVE</span>
+            </button>
+            <button id="toggleRadarBtn" onclick="toggleRadarSweep()" class="px-2.5 py-1 rounded bg-emerald-950/80 border border-emerald-600 text-emerald-300 hover:bg-emerald-900 font-bold flex items-center gap-1.5">
+              <i class="fa-solid fa-radar"></i>
+              <span id="radarBtnText">Radar Overlay: ON</span>
+            </button>
+          </div>
+
+          <!-- Quick Interactive Region Zoom Buttons -->
+          <div class="flex flex-wrap items-center gap-1.5 text-xs">
+            <span class="text-gray-400 font-bold uppercase tracking-wider mr-1">Quick Fly-To Region:</span>
+            <button onclick="flyToLocation(23.5, 87.5, 8, 'West Bengal Region')" class="px-2.5 py-1 rounded bg-emerald-800/50 hover:bg-emerald-700 text-emerald-200 font-medium">🍃 WB Overview</button>
+            <button onclick="flyToLocation(23.23, 87.07, 12, 'Bankura District')" class="px-2 py-1 rounded bg-amber-950/80 border border-amber-800 text-amber-300">Bankura</button>
+            <button onclick="flyToLocation(22.67, 87.72, 12, 'Ghatal Flood Zone')" class="px-2 py-1 rounded bg-cyan-950/80 border border-cyan-800 text-cyan-300">Ghatal</button>
+            <button onclick="flyToLocation(25.01, 88.14, 12, 'Malda Sector')" class="px-2 py-1 rounded bg-cardBorder hover:bg-gray-700 text-gray-300">Malda</button>
+            <button onclick="flyToLocation(25.31, 82.97, 12, 'Varanasi Belt (UP)')" class="px-2 py-1 rounded bg-cardBorder hover:bg-gray-700 text-gray-300">Varanasi</button>
+            <button onclick="flyToLocation(21.94, 88.89, 11, 'Sundarbans Delta')" class="px-2 py-1 rounded bg-cardBorder hover:bg-gray-700 text-gray-300">Sundarbans</button>
+          </div>
+
+        </div>
+
+        <!-- ANY LOCATION SEARCH / COORDINATE PICKER -->
+        <div class="bg-brandDark/70 border border-emerald-700/50 rounded-xl p-3 mb-4 space-y-2">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-extrabold uppercase tracking-wider text-emerald-400">📍 Show Any Map Location</span>
+            <span class="text-[10px] text-gray-400">Search a place, enter coordinates, or click anywhere on the map</span>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-12 gap-2">
+            <div class="md:col-span-6 flex gap-2">
+              <input id="placeSearchInput" type="search" placeholder="Search any place / village / city / landmark..." class="min-w-0 flex-1 bg-cardDark border border-cardBorder rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500" onkeydown="if(event.key==='Enter') searchMapPlace()">
+              <button type="button" onclick="searchMapPlace()" class="px-3 py-2 rounded-lg bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold">🔎 Search</button>
+            </div>
+            <div class="md:col-span-4 grid grid-cols-2 gap-2">
+              <input id="mapLatInput" type="number" step="any" min="-90" max="90" placeholder="Latitude" class="w-full bg-cardDark border border-cardBorder rounded-lg px-3 py-2 text-xs text-white">
+              <input id="mapLngInput" type="number" step="any" min="-180" max="180" placeholder="Longitude" class="w-full bg-cardDark border border-cardBorder rounded-lg px-3 py-2 text-xs text-white">
+            </div>
+            <button type="button" onclick="showCoordinateLocation()" class="md:col-span-2 px-3 py-2 rounded-lg bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-bold">Show Coordinates</button>
+          </div>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div id="selectedMapLocation" class="text-[11px] text-gray-400 font-mono">Selected point: none — click on the map to choose a spot</div>
+            <button type="button" onclick="clearSelectedMapLocation()" class="px-2.5 py-1 rounded bg-cardBorder hover:bg-gray-700 text-gray-300 text-[11px]">Clear selected pin</button>
+          </div>
+        </div>
+
+        <!-- Leaflet Map Container -->
+        <div class="relative w-full h-[450px] sm:h-[540px] rounded-xl border border-cardBorder overflow-hidden shadow-inner">
+          
+          <!-- Leaflet Map Canvas Div -->
+          <div id="map" class="w-full h-full z-10"></div>
+
+          <!-- Animated Radar Sweep Overlay -->
+          <div id="radarOverlay" class="radar-container">
+            <div class="radar-sweep-line"></div>
+          </div>
+
+          <!-- Status Box inside Map -->
+          <div class="absolute top-3 left-3 z-30 bg-cardDark/90 backdrop-blur border border-cardBorder p-3 rounded-lg text-xs space-y-1 shadow-md pointer-events-none">
+            <div class="font-bold text-emerald-400 flex items-center gap-2">
+              <i class="fa-solid fa-compass animate-spin"></i> INTERACTIVE LEAFLET MAP ACTIVE
+            </div>
+            <div id="activeRegionText" class="text-gray-300 font-mono">Region: Gangetic West Bengal & Eastern UP</div>
+            <div id="mapCoordinates" class="text-[10px] text-gray-400 font-mono">Center Lat: 23.50° N | Long: 87.50° E</div>
+            <div id="motionStatusText" class="text-[10px] text-amber-400 font-bold font-mono">🏃 3 Farmers Moving Continuous Field Routes</div>
+          </div>
+
+          <!-- Legend Box inside Map -->
+          <div class="absolute bottom-3 right-3 z-30 bg-cardDark/90 backdrop-blur border border-cardBorder p-2.5 rounded-lg text-[11px] space-y-1 hidden sm:block pointer-events-none">
+            <div class="font-bold text-gray-300 mb-1 border-b border-cardBorder pb-1">Map Legend</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-500 border border-white inline-block"></span> Safe / Static Farmer</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-amber-500 border border-black animate-ping inline-block"></span> Moving Farmer in Field</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500 border border-white inline-block"></span> Active Hazard Danger Zone</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-cyan-400 inline-block"></span> Flood / High River Warning</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-purple-500 inline-block"></span> IoT Telemetry Station</div>
+            <div class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-emerald-300 border border-emerald-700 inline-block"></span> Safe Emergency Shelter</div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- TAB 2: FARMER REGISTRY (DBMS MANAGEMENT) -->
+    <section id="section-farmers" class="hidden space-y-4">
+      <div class="glass-card rounded-2xl p-4 sm:p-5">
+        
+        <!-- Controls & Search -->
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 class="text-lg font-bold text-white flex items-center gap-2">
+              🧑‍🌾 Farmer Database Table (`farmers`)
+            </h2>
+            <p class="text-xs text-gray-400">Direct spatial query & CRUD management for registered agricultural workers</p>
+          </div>
+
+          <div class="flex items-center gap-2 w-full sm:w-auto">
+            <div class="relative flex-1 sm:w-64">
+              <input type="text" id="farmerSearch" oninput="renderFarmerTable()" placeholder="Search Name, Phone, District..." class="w-full bg-brandDark border border-cardBorder rounded-lg px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-emerald-500 pl-8">
+              <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2.5 text-xs text-gray-500"></i>
+            </div>
+            <button onclick="openRegisterModal()" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs whitespace-nowrap">
+              + New Record
+            </button>
+          </div>
+        </div>
+
+        <!-- Table View -->
+        <div class="overflow-x-auto rounded-xl border border-cardBorder">
+          <table class="w-full text-left text-xs text-gray-300">
+            <thead class="bg-cardDark text-emerald-400 uppercase tracking-wider text-[11px] font-bold border-b border-cardBorder">
+              <tr>
+                <th class="p-3">ID</th>
+                <th class="p-3">Name</th>
+                <th class="p-3">Phone (SMS)</th>
+                <th class="p-3">District / Sector</th>
+                <th class="p-3">Coordinates (Lat, Long)</th>
+                <th class="p-3">Field Status</th>
+                <th class="p-3">Language</th>
+                <th class="p-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="farmerTableBody" class="divide-y divide-cardBorder/60 bg-brandDark/40">
+              <!-- Dynamically Populated -->
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- TAB 3: EMERGENCY ALERTS & BROADCAST -->
+    <section id="section-broadcast" class="hidden space-y-4">
+      <div class="glass-card rounded-2xl p-5">
+        <h2 class="text-lg font-bold text-white mb-1">📢 Emergency Broadcast & Alert Dispatches</h2>
+        <p class="text-xs text-gray-400 mb-4">Trigger automated voice calls, WhatsApp messages, and siren alerts via localized DBMS phone triggers.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <!-- Broadcast Control Form -->
+          <div class="bg-brandDark/60 p-4 rounded-xl border border-cardBorder space-y-4">
+            <h3 class="text-sm font-bold text-amber-400 flex items-center gap-2">
+              <i class="fa-solid fa-tower-broadcast"></i> Create Mass Advisory Dispatch
+            </h3>
+
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Target District / Sector</label>
+              <select id="broadcastDistrict" class="w-full bg-cardDark border border-cardBorder rounded-lg p-2 text-xs text-gray-200">
+                <option value="ALL">ALL SECTORS (West Bengal & UP)</option>
+                <option value="Bankura">Bankura District (High Strike Zone)</option>
+                <option value="Ghatal">Ghatal Sub-Division (Flood Zone)</option>
+                <option value="Malda">Malda Sector</option>
+                <option value="Varanasi">Varanasi UP Belt</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Alert Severity Level</label>
+              <select id="broadcastSeverity" class="w-full bg-cardDark border border-cardBorder rounded-lg p-2 text-xs text-gray-200">
+                <option value="HIGH">🔴 RED ALERT (Immediate Evacuation / Shelter)</option>
+                <option value="MEDIUM">🟡 ORANGE WARNING (Severe Weather Impending)</option>
+                <option value="INFO">🔵 ADVISORY (General Weather Update)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs text-gray-400 mb-1">Message Content (Bengali / Hindi Auto-Translate)</label>
+              <textarea id="broadcastMessage" rows="3" class="w-full bg-cardDark border border-cardBorder rounded-lg p-2 text-xs text-gray-200" placeholder="⚠️ ⚡ Intense Lightning Warning! Seek immediate shelter in safe concrete building or AgriSuraksha Center. Do not stand under tall trees!"></textarea>
+            </div>
+
+            <button onclick="dispatchMassAlert()" class="w-full py-2.5 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase tracking-wider glow-red transition">
+              🚀 Execute Mass Dispatch & Voice Alert
+            </button>
+          </div>
+
+          <!-- Broadcast Audit Feed -->
+          <div class="bg-brandDark/60 p-4 rounded-xl border border-cardBorder flex flex-col h-[320px]">
+            <h3 class="text-sm font-bold text-cyan-400 mb-3 flex items-center gap-2">
+              <i class="fa-solid fa-list-check"></i> Live Dispatch Logs (`alert_broadcasts`)
+            </h3>
+            <div id="broadcastLogs" class="flex-1 overflow-y-auto space-y-2 pr-1 font-mono text-[11px]">
+              <!-- Dynamically Populated -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: SENSOR TELEMETRY -->
+    <section id="section-telemetry" class="hidden space-y-4">
+      <div class="glass-card rounded-2xl p-5">
+        <h2 class="text-lg font-bold text-white mb-1">📡 Weather IoT Sensor Telemetry</h2>
+        <p class="text-xs text-gray-400 mb-4">Real-time electrostatic ground sensors and atmospheric pressure meters across Bengal & UP agricultural hubs.</p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <!-- Sensor 1 -->
+          <div class="bg-brandDark/80 p-4 rounded-xl border border-cardBorder space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-emerald-400">Node #WB-BNK-01</span>
+              <span class="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-full">ACTIVE</span>
+            </div>
+            <div class="text-sm font-bold text-gray-200">Bankura Field Station</div>
+            <div class="space-y-1 text-xs text-gray-400 font-mono">
+              <div class="flex justify-between"><span>Electric Charge:</span><span class="text-amber-400 font-bold">4.2 kV/m (ELEVATED)</span></div>
+              <div class="flex justify-between"><span>Cloud Altitude:</span><span>1,200 meters</span></div>
+              <div class="flex justify-between"><span>Rainfall Rate:</span><span>12 mm/hr</span></div>
+            </div>
+          </div>
+
+          <!-- Sensor 2 -->
+          <div class="bg-brandDark/80 p-4 rounded-xl border border-cardBorder space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-cyan-400">Node #WB-GHT-04</span>
+              <span class="text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-800 px-2 py-0.5 rounded-full">FLOOD WATCH</span>
+            </div>
+            <div class="text-sm font-bold text-gray-200">Ghatal Water Level Gauge</div>
+            <div class="space-y-1 text-xs text-gray-400 font-mono">
+              <div class="flex justify-between"><span>River Level:</span><span class="text-cyan-400 font-bold">8.4m (CRITICAL)</span></div>
+              <div class="flex justify-between"><span>Water Flow Velocity:</span><span>3.2 m/s</span></div>
+              <div class="flex justify-between"><span>Silt Accumulation:</span><span>High</span></div>
+            </div>
+          </div>
+
+          <!-- Sensor 3 -->
+          <div class="bg-brandDark/80 p-4 rounded-xl border border-cardBorder space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-purple-400">Node #UP-VRN-09</span>
+              <span class="text-[10px] bg-purple-950 text-purple-300 border border-purple-800 px-2 py-0.5 rounded-full">ACTIVE</span>
+            </div>
+            <div class="text-sm font-bold text-gray-200">Varanasi Rural Sensor</div>
+            <div class="space-y-1 text-xs text-gray-400 font-mono">
+              <div class="flex justify-between"><span>Electric Charge:</span><span class="text-emerald-400 font-bold">0.8 kV/m (NORMAL)</span></div>
+              <div class="flex justify-between"><span>Cloud Altitude:</span><span>3,500 meters</span></div>
+              <div class="flex justify-between"><span>Temperature:</span><span>34°C</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: SAFE SHELTERS -->
+    <section id="section-shelters" class="hidden space-y-4">
+      <div class="glass-card rounded-2xl p-5">
+        <h2 class="text-lg font-bold text-white mb-1">🏛️ Safe Cyclone & Lightning Shelters (`shelters`)</h2>
+        <p class="text-xs text-gray-400 mb-4">Geo-tagged safe shelters equipped with lightning arrestors and surge capacity.</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="shelterGrid">
+          <!-- Dynamically Rendered -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 6: SOS DISTRESS HUB -->
+    <section id="section-sos" class="hidden space-y-4">
+      <div class="glass-card rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h2 class="text-lg font-bold text-red-400 flex items-center gap-2">
+              🚨 Active SOS Emergency Distress Calls
+            </h2>
+            <p class="text-xs text-gray-400">Incoming distress signals triggered directly from farmer mobile apps or SMS</p>
+          </div>
+          <button onclick="triggerSOS()" class="px-3 py-1.5 rounded-lg bg-red-700 hover:bg-red-600 text-white font-bold text-xs">
+            + Simulate Emergency Call
+          </button>
+        </div>
+
+        <div id="sosContainer" class="space-y-3">
+          <!-- Dynamically Populated -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 7: DISPATCH SIMULATOR & AUDIT -->
+    <section id="section-audit" class="hidden space-y-4">
+      <div class="glass-card rounded-2xl p-5">
+        <h2 class="text-lg font-bold text-white mb-1">📑 System Dispatch Audit & DBMS Queries</h2>
+        <p class="text-xs text-gray-400 mb-4">SQL execution log and spatial GIS event history</p>
+
+        <div class="bg-brandDark p-4 rounded-xl border border-cardBorder font-mono text-xs text-emerald-400 space-y-2 h-[350px] overflow-y-auto" id="sqlAuditLog">
+          <div>-- AgriSuraksha Spatial DBMS Transaction Audit Trail Initialization</div>
+          <div>[SELECT * FROM farmers WHERE hazard_status='HIGH_RISK';] -> 12 Rows Returned</div>
+          <div>[SELECT shelter_id, capacity_remaining FROM shelters WHERE occupancy &lt; 80;] -> 8 Shelters Available</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- REGISTER FARMER MODAL FORM -->
+  <div id="farmerModal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center hidden p-4">
+    <div class="bg-cardDark border border-cardBorder w-full max-w-md rounded-2xl p-5 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-cardBorder pb-3">
+        <h3 class="font-bold text-lg text-white flex items-center gap-2">
+          🧑‍🌾 Register New Farmer
+        </h3>
+        <button onclick="closeRegisterModal()" class="text-gray-400 hover:text-white">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <form id="farmerForm" onsubmit="saveFarmer(event)" class="space-y-3 text-xs">
+        <div>
+          <label class="block text-gray-400 mb-1">Full Name</label>
+          <input type="text" id="mName" required class="w-full bg-brandDark border border-cardBorder rounded-lg p-2 text-gray-200 focus:border-emerald-500" placeholder="e.g. Ramesh Ghosh">
+        </div>
+
+        <div>
+          <label class="block text-gray-400 mb-1">Phone Number (10 Digit)</label>
+          <input type="tel" id="mPhone" required pattern="[0-9]{10}" class="w-full bg-brandDark border border-cardBorder rounded-lg p-2 text-gray-200 focus:border-emerald-500" placeholder="9830123456">
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-gray-400 mb-1">District</label>
+            <select id="mDistrict" class="w-full bg-brandDark border border-cardBorder rounded-lg p-2 text-gray-200">
+              <option value="Bankura">Bankura (WB)</option>
+              <option value="Ghatal">Ghatal / Medinipur (WB)</option>
+              <option value="Malda">Malda (WB)</option>
+              <option value="Murshidabad">Murshidabad (WB)</option>
+              <option value="Sundarbans">Sundarbans (WB)</option>
+              <option value="Varanasi">Varanasi (UP)</option>
+              <option value="Gorakhpur">Gorakhpur (UP)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-gray-400 mb-1">Preferred Dialect</label>
+            <select id="mLang" class="w-full bg-brandDark border border-cardBorder rounded-lg p-2 text-gray-200">
+              <option value="Bengali">Bengali (বাংলা)</option>
+              <option value="Hindi">Hindi (हिंदी)</option>
+              <option value="English">English</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-gray-400 mb-1">Current Field Status</label>
+          <select id="mStatus" class="w-full bg-brandDark border border-cardBorder rounded-lg p-2 text-gray-200">
+            <option value="SAFE">SAFE (At Shelter/Home)</option>
+            <option value="IN_FIELD">IN FIELD (High Hazard Patrol/Movement)</option>
+          </select>
+        </div>
+
+        <div class="pt-2 flex justify-end gap-2">
+          <button type="button" onclick="closeRegisterModal()" class="px-4 py-2 rounded-lg bg-cardBorder hover:bg-gray-700 text-gray-300 font-bold">Cancel</button>
+          <button type="submit" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold">Save to DBMS & Map</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- BROADCAST SUCCESS NOTIFICATION TOAST -->
+  <div id="toast" class="fixed bottom-5 right-5 bg-emerald-900 border border-emerald-500 text-emerald-100 px-4 py-3 rounded-xl shadow-2xl text-xs font-bold transition transform translate-y-20 opacity-0 pointer-events-none z-50 flex items-center gap-3">
+    <i class="fa-solid fa-circle-check text-xl text-emerald-400"></i>
+    <span id="toastMsg">Action executed successfully!</span>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="bg-cardDark border-t border-cardBorder mt-8 py-4 px-4 text-center text-xs text-gray-500">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2">
+      <div>⚡ <strong>AgriSuraksha KISAN RAKSHAK</strong> &copy; 2026 DBMS & Dynamic GIS Map Prototype</div>
+      <div class="flex items-center gap-4 text-[11px] font-mono">
+        <span>Leaflet OpenStreetMap</span>
+        <span>MySQL Spatial: InnoDB</span>
+        <span>Continuous Field Patrol: Active</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- JAVASCRIPT LOGIC & LEAFLET DYNAMIC MAP ENGINE -->
+  <script>
+    /*
+      SHARED DATABASE SETUP
+      1. Create a Firebase project and enable Realtime Database.
+      2. Enable Authentication > Sign-in method > Anonymous.
+      3. Paste your Firebase web-app config below.
+      4. Create Realtime Database rules (example supplied with the project instructions).
+      All users must use the same Firebase project/database URL.
+    */
+    const firebaseConfig = {
+      apiKey: "PASTE_YOUR_FIREBASE_API_KEY",
+      authDomain: "PASTE_YOUR_PROJECT_ID.firebaseapp.com",
+      databaseURL: "https://PASTE_YOUR_DATABASE_NAME-default-rtdb.firebaseio.com",
+      projectId: "PASTE_YOUR_PROJECT_ID",
+      appId: "PASTE_YOUR_FIREBASE_APP_ID",
+      // measurementId is optional; paste it only if Firebase provides one.
+    };
+
+    let sharedDb = null;
+    let applyingRemoteData = false;
+
+    function setSharedStatus(message, online = false) {
+      const el = document.getElementById('sharedSyncStatus');
+      if (!el) return;
+      el.innerHTML = `<span class="w-2 h-2 rounded-full ${online ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}"></span>${message}`;
+      el.className = `inline-flex items-center gap-1.5 ${online ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60' : 'bg-amber-950/80 text-amber-300 border-amber-700/60'} text-xs px-2.5 py-0.5 rounded-full border font-mono`;
+    }
+
+    function firebaseConfigured() {
+      return firebaseConfig.apiKey.startsWith("AIza") &&
+        !firebaseConfig.projectId.includes("PASTE_") &&
+        !firebaseConfig.databaseURL.includes("PASTE_") &&
+        !firebaseConfig.appId.includes("PASTE_");
+    }
+
+    function publishSharedCollection(key, value) {
+      if (!sharedDb || applyingRemoteData) return;
+      sharedDb.ref('agrisuraksha/' + key).set(value)
+        .then(() => setSharedStatus('LIVE: changes saved', true))
+        .catch(err => {
+          console.error('Shared database write failed:', err);
+          setSharedStatus('save failed: check database rules', false);
+          showToast('Shared save failed. Check Firebase setup/rules.');
+        });
+    }
+
+    function publishAllSharedData() {
+      publishSharedCollection('farmers', dbFarmers);
+      publishSharedCollection('shelters', dbShelters);
+      publishSharedCollection('broadcasts', dbBroadcasts);
+      publishSharedCollection('sos', dbSos);
+    }
+
+    function renderAllSharedViews() {
+      renderFarmerTable();
+      renderMapLayers();
+      renderBroadcastLogs();
+      renderShelters();
+      renderSosHub();
+      updateMetrics();
+    }
+
+    function startSharedDatabase() {
+      if (!firebaseConfigured()) {
+        setSharedStatus('setup required: add Firebase config', false);
+        console.warn('Shared sync is not active. Add the Firebase Web App config first.');
+        return;
+      }
+
+      try {
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+        sharedDb = firebase.database();
+        setSharedStatus('signing in...', false);
+
+        firebase.auth().signInAnonymously().then(async () => {
+          const keys = ['farmers', 'shelters', 'broadcasts', 'sos'];
+          const localData = {
+            farmers: dbFarmers,
+            shelters: dbShelters,
+            broadcasts: dbBroadcasts,
+            sos: dbSos
+          };
+
+          // Seed each database collection only when it is genuinely empty.
+          // This prevents every device from replacing an existing shared database.
+          await Promise.all(keys.map(async key => {
+            const ref = sharedDb.ref('agrisuraksha/' + key);
+            await ref.transaction(current => current === null ? localData[key] : undefined);
+          }));
+
+          // Firebase reports connection state separately from authentication.
+          sharedDb.ref('.info/connected').on('value', snapshot => {
+            setSharedStatus(snapshot.val() ? 'LIVE: shared database connected' : 'offline: reconnecting...', !!snapshot.val());
+          });
+
+          keys.forEach(key => {
+            sharedDb.ref('agrisuraksha/' + key).on('value', snapshot => {
+              const remote = snapshot.val();
+              if (remote === null) return;
+              applyingRemoteData = true;
+              try {
+                const normalized = Array.isArray(remote) ? remote : Object.values(remote);
+                if (key === 'farmers') dbFarmers = normalized;
+                if (key === 'shelters') dbShelters = normalized;
+                if (key === 'broadcasts') dbBroadcasts = normalized;
+                if (key === 'sos') dbSos = normalized;
+                renderAllSharedViews();
+              } finally {
+                applyingRemoteData = false;
+              }
+            }, error => {
+              console.error('Firebase read/listener error for ' + key + ':', error);
+              setSharedStatus('database permission/error', false);
+            });
+          });
+        }).catch(err => {
+          console.error('Firebase authentication failed:', err);
+          setSharedStatus('authentication failed', false);
+        });
+      } catch (err) {
+        console.error('Firebase initialization failed:', err);
+        setSharedStatus('Firebase configuration error', false);
+      }
+    }
+
+    // INITIAL DBMS STATE WITH REAL LAT/LNG COORDINATES
+    const defaultFarmers = [
+      { id: 101, name: "Subhash Mahato", phone: "9832104512", district: "Bankura", status: "IN_FIELD", lang: "Bengali", lat: 23.23, lng: 87.07, routeIndex: 0 },
+      { id: 102, name: "Biren Adhikari", phone: "9734128901", district: "Ghatal", status: "IN_FIELD", lang: "Bengali", lat: 22.67, lng: 87.72, routeIndex: 1 },
+      { id: 103, name: "Amal Ghosh", phone: "9433109823", district: "Malda", status: "SAFE", lang: "Bengali", lat: 25.01, lng: 88.14, routeIndex: -1 },
+      { id: 104, name: "Rajesh Yadav", phone: "9122345678", district: "Varanasi", status: "SAFE", lang: "Hindi", lat: 25.31, lng: 82.97, routeIndex: -1 },
+      { id: 105, name: "Mantu Majhi", phone: "9832998811", district: "Sundarbans", status: "IN_FIELD", lang: "Bengali", lat: 21.94, lng: 88.89, routeIndex: 2 },
+      { id: 106, name: "Gorakh Nath", phone: "9415123456", district: "Gorakhpur", status: "SAFE", lang: "Hindi", lat: 26.76, lng: 83.37, routeIndex: -1 }
+    ];
+
+    const defaultShelters = [
+      { id: 1, name: "Bankura Govt High School Safe Hub", district: "Bankura", capacity: 1500, occupancy: 320, lat: 23.25, lng: 87.08 },
+      { id: 2, name: "Ghatal Flood Relief Citadel #2", district: "Ghatal", capacity: 3000, occupancy: 1850, lat: 22.69, lng: 87.74 },
+      { id: 3, name: "Malda Cyclone & Lightning Center", district: "Malda", capacity: 2500, occupancy: 110, lat: 25.03, lng: 88.16 },
+      { id: 4, name: "Varanasi Kisan Seva Complex", district: "Varanasi", capacity: 2000, occupancy: 400, lat: 25.33, lng: 82.99 }
+    ];
+
+    const telemetryStations = [
+      { id: 'WB-BNK-01', name: "Bankura Weather Radar Station", lat: 23.21, lng: 87.05 },
+      { id: 'WB-GHT-04', name: "Ghatal Water Level Telemetry Gauge", lat: 22.65, lng: 87.70 },
+      { id: 'UP-VRN-09', name: "Varanasi Electrostatic Cloud Sensor", lat: 25.29, lng: 82.95 }
+    ];
+
+    // CONTINUOUS PATROL MOVEMENT ROUTES FOR FARMERS IN FIELD
+    const patrolRoutes = [
+      // Route 0: Bankura Field Waypoints
+      [
+        { lat: 23.23, lng: 87.07 },
+        { lat: 23.235, lng: 87.078 },
+        { lat: 23.242, lng: 87.072 },
+        { lat: 23.238, lng: 87.065 },
+        { lat: 23.23, lng: 87.07 }
+      ],
+      // Route 1: Ghatal Riverbank Waypoints
+      [
+        { lat: 22.67, lng: 87.72 },
+        { lat: 22.676, lng: 87.728 },
+        { lat: 22.682, lng: 87.722 },
+        { lat: 22.675, lng: 87.714 },
+        { lat: 22.67, lng: 87.72 }
+      ],
+      // Route 2: Sundarbans Paddy Field Waypoints
+      [
+        { lat: 21.94, lng: 88.89 },
+        { lat: 21.948, lng: 88.896 },
+        { lat: 21.954, lng: 88.888 },
+        { lat: 21.944, lng: 88.882 },
+        { lat: 21.94, lng: 88.89 }
+      ]
+    ];
+
+    let dbFarmers = JSON.parse(localStorage.getItem('agri_farmers')) || defaultFarmers;
+    let dbShelters = JSON.parse(localStorage.getItem('agri_shelters')) || defaultShelters;
+    let dbBroadcasts = JSON.parse(localStorage.getItem('agri_broadcasts')) || [
+      { id: 1, time: "10:14 AM", district: "Bankura", message: "⚡ High Electrostatic Charge Warning Dispatched via SMS", count: 120 },
+      { id: 2, time: "11:30 AM", district: "Ghatal", message: "🌊 River Silabati Water Level Alert", count: 450 }
+    ];
+    let dbSos = JSON.parse(localStorage.getItem('agri_sos')) || [
+      { id: 501, name: "Biren Adhikari", location: "Ghatal Sector 3", phone: "9734128901", status: "PENDING", time: "12:05 PM" }
+    ];
+
+    // MAP & LEAFLET VARIABLES
+    let map = null;
+    let farmerLayerGroup = null;
+    let hazardLayerGroup = null;
+    let sensorLayerGroup = null;
+    let shelterLayerGroup = null;
+    let selectedLocationMarker = null;
+    
+    let isMovementActive = true;
+    let movementTimer = null;
+    let isSirenOn = false;
+    let audioCtx = null;
+    let oscillator = null;
+    let isRadarVisible = true;
+
+    // INITIALIZE LEAFLET MAP
+    function initMap() {
+      // Create Leaflet Map centered over West Bengal / Eastern UP
+      map = L.map('map', {
+        zoomControl: true,
+        attributionControl: false
+      }).setView([23.25, 87.00], 7);
+
+      // Esri World Street Map basemap (public tiles, no API key required)
+      // Uses the standard XYZ tile endpoint: z/y/x
+      L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+        maxZoom: 19,
+        attribution: 'Tiles &copy; Esri — Sources: Esri, HERE, Garmin, USGS, Intermap, INCREMENT P, NRCan, METI, NASA, EPA, USDA, and the GIS User Community'
+      }).addTo(map);
+
+      // Initialize Layer Groups
+      farmerLayerGroup = L.layerGroup().addTo(map);
+      hazardLayerGroup = L.layerGroup().addTo(map);
+      sensorLayerGroup = L.layerGroup().addTo(map);
+      shelterLayerGroup = L.layerGroup().addTo(map);
+
+      // Map Move Listener for Coordinates Display
+      map.on('move', function() {
+        const center = map.getCenter();
+        document.getElementById('mapCoordinates').innerText = 
+          `Center Lat: ${center.lat.toFixed(2)}° N | Long: ${center.lng.toFixed(2)}° E`;
+      });
+
+      // Click anywhere on the map to place a temporary location pin.
+      map.on('click', function(event) {
+        setSelectedMapLocation(event.latlng.lat, event.latlng.lng, 'Map selected point', true);
+      });
+
+      // Render Static & Dynamic Layers
+      renderMapLayers();
+
+      // Start Real-Time Movement Loop
+      startMovementEngine();
+    }
+
+    // RENDER MAP LAYERS (FARMERS, HAZARD ZONES, SENSORS, SHELTERS)
+    function renderMapLayers() {
+      if (!map) return;
+
+      // 1. FARMERS LAYER
+      farmerLayerGroup.clearLayers();
+      if (document.getElementById('layerFarmers').checked) {
+        dbFarmers.forEach(f => {
+          const isMoving = f.status === 'IN_FIELD';
+          
+          // Custom SVG Marker Icon
+          const iconHtml = isMoving ? `
+            <div style="position:relative; width:28px; height:28px;">
+              <div class="pulse-ring-hazard"></div>
+              <div style="background:#f59e0b; color:#000; border:2px solid #fff; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-center:center; font-size:12px; font-weight:bold; shadow:0 2px 6px rgba(0,0,0,0.6);">
+                🏃
+              </div>
+            </div>
+          ` : `
+            <div style="background:#10b981; color:#fff; border:2px solid #fff; border-radius:50%; width:22px; height:22px; display:flex; align-items:center; justify-center:center; font-size:11px; box-shadow:0 2px 5px rgba(0,0,0,0.5);">
+              🧑‍🌾
+            </div>
+          `;
+
+          const customIcon = L.divIcon({
+            html: iconHtml,
+            className: 'moving-farmer-icon',
+            iconSize: [28, 28],
+            iconAnchor: [14, 14]
+          });
+
+          const marker = L.marker([f.lat, f.lng], { icon: customIcon });
+          
+          marker.bindPopup(`
+            <div style="font-family:'Inter',sans-serif;">
+              <strong style="color:#10b981; font-size:13px;">${f.name}</strong><br/>
+              <span style="color:#94a3b8; font-size:11px;">District: ${f.district}</span><br/>
+              <span style="font-size:11px;">Status: <b style="color:${isMoving ? '#f59e0b' : '#10b981'};">${f.status}</b></span><br/>
+              <span style="color:#cbd5e1; font-size:10px; font-family:monospace;">Lat: ${f.lat.toFixed(4)}, Lng: ${f.lng.toFixed(4)}</span><br/>
+              <a href="tel:${f.phone}" style="color:#06b6d4; text-decoration:none; font-weight:bold; font-size:11px; display:inline-block; margin-top:4px;">📞 Call ${f.phone}</a>
+            </div>
+          `);
+
+          farmerLayerGroup.addLayer(marker);
+        });
+      }
+
+      // 2. HAZARD ZONES LAYER
+      hazardLayerGroup.clearLayers();
+      if (document.getElementById('layerHazards').checked) {
+        // Bankura Lightning Circle Hazard
+        const bankuraHazard = L.circle([23.23, 87.07], {
+          color: '#f59e0b',
+          fillColor: '#f59e0b',
+          fillOpacity: 0.25,
+          radius: 12000
+        }).bindPopup("<b>⚡ High Lightning Hazard Zone</b><br/>Bankura Rural Sector (Charge Level: Extreme)");
+        hazardLayerGroup.addLayer(bankuraHazard);
+
+        // Ghatal Flood Circle Hazard
+        const ghatalHazard = L.circle([22.67, 87.72], {
+          color: '#06b6d4',
+          fillColor: '#06b6d4',
+          fillOpacity: 0.3,
+          radius: 15000
+        }).bindPopup("<b>🌊 Ghatal Inundation Risk Zone</b><br/>River Silabati Water Level Elevated (+2.4m)");
+        hazardLayerGroup.addLayer(ghatalHazard);
+      }
+
+      // 3. TELEMETRY SENSORS LAYER
+      sensorLayerGroup.clearLayers();
+      if (document.getElementById('layerTelemetry').checked) {
+        telemetryStations.forEach(s => {
+          const sensorIcon = L.divIcon({
+            html: `<div style="background:#a855f7; color:#fff; border:2px solid #fff; border-radius:6px; width:20px; height:20px; display:flex; align-items:center; justify-center:center; font-size:10px;">📡</div>`,
+            className: '',
+            iconSize: [20, 20]
+          });
+          const marker = L.marker([s.lat, s.lng], { icon: sensorIcon });
+          marker.bindPopup(`<b>${s.name}</b><br/>Node ID: ${s.id}<br/><span style="color:#a855f7;">Status: REALTIME ONLINE</span>`);
+          sensorLayerGroup.addLayer(marker);
+        });
+      }
+
+      // 4. SHELTERS LAYER
+      shelterLayerGroup.clearLayers();
+      if (document.getElementById('layerShelters').checked) {
+        dbShelters.forEach(sh => {
+          const shelterIcon = L.divIcon({
+            html: `<div style="background:#059669; color:#fff; border:2px solid #34d399; border-radius:6px; width:22px; height:22px; display:flex; align-items:center; justify-center:center; font-size:11px;">🏛️</div>`,
+            className: '',
+            iconSize: [22, 22]
+          });
+          const marker = L.marker([sh.lat, sh.lng], { icon: shelterIcon });
+          marker.bindPopup(`<b>${sh.name}</b><br/>Capacity: ${sh.occupancy}/${sh.capacity} Persons<br/><span style="color:#34d399;">Safe Lightning Protection Active</span>`);
+          shelterLayerGroup.addLayer(marker);
+        });
+      }
+    }
+
+    // CONTINUOUS MOVEMENT ENGINE FOR FARMERS IN FIELD
+    function startMovementEngine() {
+      if (movementTimer) clearInterval(movementTimer);
+
+      movementTimer = setInterval(() => {
+        if (!isMovementActive) return;
+
+        let farmersUpdated = false;
+
+        dbFarmers.forEach(f => {
+          if (f.status === 'IN_FIELD' && f.routeIndex >= 0 && f.routeIndex < patrolRoutes.length) {
+            const route = patrolRoutes[f.routeIndex];
+            
+            // Increment subtle coordinate step towards route waypoints
+            if (!f.stepIndex) f.stepIndex = 0;
+            const target = route[f.stepIndex];
+
+            const stepSize = 0.0008; // Smooth movement delta
+            const latDiff = target.lat - f.lat;
+            const lngDiff = target.lng - f.lng;
+            const distance = Math.sqrt(latDiff * latDiff + lngDiff * lngDiff);
+
+            if (distance < stepSize) {
+              f.stepIndex = (f.stepIndex + 1) % route.length;
+            } else {
+              f.lat += (latDiff / distance) * stepSize;
+              f.lng += (lngDiff / distance) * stepSize;
+            }
+
+            farmersUpdated = true;
+          }
+        });
+
+        if (farmersUpdated) {
+          renderMapLayers();
+          // Also update table if visible
+          if (!document.getElementById('section-farmers').classList.contains('hidden')) {
+            renderFarmerTable();
+          }
+        }
+      }, 1000); // 1 Second tick smooth movement
+    }
+
+    // TOGGLE FARMER MOVEMENT
+    function toggleFarmerMovement() {
+      isMovementActive = !isMovementActive;
+      const text = document.getElementById('motionBtnText');
+      const icon = document.getElementById('motionIcon');
+      const statusText = document.getElementById('motionStatusText');
+
+      if (isMovementActive) {
+        text.innerText = "Movement Engine: ACTIVE";
+        icon.className = "fa-solid fa-person-walking animate-pulse";
+        statusText.innerText = "🏃 3 Farmers Moving Continuous Field Routes";
+        showToast("▶️ Continuous Field Movement Engine Started");
+      } else {
+        text.innerText = "Movement Engine: PAUSED";
+        icon.className = "fa-solid fa-pause";
+        statusText.innerText = "⏸️ Farmer Patrol Movement Paused";
+        showToast("⏸️ Movement Tracking Paused");
+      }
+    }
+
+    // TOGGLE RADAR OVERLAY
+    function toggleRadarSweep() {
+      isRadarVisible = !isRadarVisible;
+      const overlay = document.getElementById('radarOverlay');
+      const text = document.getElementById('radarBtnText');
+
+      if (isRadarVisible) {
+        overlay.style.display = 'block';
+        text.innerText = "Radar Overlay: ON";
+      } else {
+        overlay.style.display = 'none';
+        text.innerText = "Radar Overlay: OFF";
+      }
+    }
+
+    // FLY TO LOCATION ON LEAFLET MAP
+    // Show any location by place-name search, map click, or exact coordinates.
+    function setSelectedMapLocation(lat, lng, label, shouldFly = true) {
+      if (!map || !Number.isFinite(lat) || !Number.isFinite(lng) ||
+          lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        showToast('Please enter valid latitude and longitude values.');
+        return;
+      }
+      if (selectedLocationMarker) map.removeLayer(selectedLocationMarker);
+      selectedLocationMarker = L.marker([lat, lng], { title: label || 'Selected location', riseOnHover: true }).addTo(map);
+      const safeLabel = String(label || 'Selected location').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+      selectedLocationMarker.bindPopup(`<b>📍 ${safeLabel}</b><br><span>Lat: ${lat.toFixed(6)}<br>Lng: ${lng.toFixed(6)}</span>`).openPopup();
+      document.getElementById('mapLatInput').value = lat.toFixed(6);
+      document.getElementById('mapLngInput').value = lng.toFixed(6);
+      document.getElementById('selectedMapLocation').textContent = `Selected: ${label || 'Map point'} | ${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+      document.getElementById('activeRegionText').textContent = `Selected: ${label || 'Map point'}`;
+      if (shouldFly) map.flyTo([lat, lng], Math.max(map.getZoom(), 14), { animate: true, duration: 1.2 });
+    }
+
+    function showCoordinateLocation() {
+      const latText = document.getElementById('mapLatInput').value.trim();
+      const lngText = document.getElementById('mapLngInput').value.trim();
+      if (!latText || !lngText) { showToast('Enter both latitude and longitude.'); return; }
+      setSelectedMapLocation(Number(latText), Number(lngText), 'Coordinate location', true);
+    }
+
+    async function searchMapPlace() {
+      const input = document.getElementById('placeSearchInput');
+      const query = input.value.trim();
+      if (!query) { showToast('Type a place name to search.'); return; }
+      const button = document.querySelector('button[onclick="searchMapPlace()"]');
+      if (button) { button.disabled = true; button.textContent = 'Searching...'; }
+      try {
+        const response = await fetch('https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&q=' + encodeURIComponent(query), { headers: { 'Accept-Language': 'en' } });
+        if (!response.ok) throw new Error('Search service unavailable');
+        const results = await response.json();
+        if (!results.length) { showToast('No matching place found. Try a nearby town or landmark.'); return; }
+        const place = results[0];
+        setSelectedMapLocation(Number(place.lat), Number(place.lon), place.display_name, true);
+      } catch (error) {
+        console.error('Map place search failed:', error);
+        showToast('Place search failed. You can still use map click or coordinates.');
+      } finally {
+        if (button) { button.disabled = false; button.textContent = '🔎 Search'; }
+      }
+    }
+
+    function clearSelectedMapLocation() {
+      if (selectedLocationMarker && map) map.removeLayer(selectedLocationMarker);
+      selectedLocationMarker = null;
+      document.getElementById('selectedMapLocation').textContent = 'Selected point: none — click on the map to choose a spot';
+      document.getElementById('activeRegionText').textContent = 'Region: Gangetic West Bengal & Eastern UP';
+    }
+
+    function flyToLocation(lat, lng, zoom, regionName) {
+      if (!map) return;
+      map.flyTo([lat, lng], zoom, {
+        animate: true,
+        duration: 1.5
+      });
+      document.getElementById('activeRegionText').innerText = `Region Zoomed: ${regionName}`;
+      showToast(`🗺️ Map Centered on ${regionName}`);
+    }
+
+    // TOGGLE LAYER CHECKBOXES
+    function toggleMapLayers() {
+      renderMapLayers();
+    }
+
+    // AUDIO SIREN SIMULATION
+    function toggleSiren() {
+      isSirenOn = !isSirenOn;
+      const btn = document.getElementById('sirenBtn');
+      const icon = document.getElementById('sirenIcon');
+      const text = document.getElementById('sirenStatus');
+
+      if (isSirenOn) {
+        btn.classList.replace('bg-red-950/60', 'bg-red-600');
+        btn.classList.add('glow-red');
+        icon.className = 'fa-solid fa-bell text-white animate-bounce';
+        text.innerText = "Siren Sound: ON";
+        playSirenSound();
+        showToast("🚨 Emergency Siren Alert Sound Activated!");
+      } else {
+        btn.classList.replace('bg-red-600', 'bg-red-950/60');
+        btn.classList.remove('glow-red');
+        icon.className = 'fa-solid fa-bell-slash';
+        text.innerText = "Siren Sound: OFF";
+        stopSirenSound();
+      }
+    }
+
+    function playSirenSound() {
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        oscillator.type = 'sawtooth';
+        oscillator.frequency.setValueAtTime(440, audioCtx.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 1);
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 3); // Auto stop after 3 sec preview
+      } catch (e) {
+        console.log('Audio Context restricted or not supported.');
+      }
+    }
+
+    function stopSirenSound() {
+      if (oscillator) {
+        try { oscillator.stop(); } catch(e){}
+      }
+    }
+
+    // TAB NAVIGATION
+    function switchTab(tabId) {
+      const tabs = ['map', 'farmers', 'broadcast', 'telemetry', 'shelters', 'sos', 'audit'];
+      tabs.forEach(t => {
+        const sec = document.getElementById(`section-${t}`);
+        const btn = document.getElementById(`tab-${t}`);
+        if (t === tabId) {
+          sec.classList.remove('hidden');
+          btn.className = "active-tab px-4 py-2.5 rounded-t-xl font-semibold text-xs sm:text-sm flex items-center gap-2 transition";
+        } else {
+          sec.classList.add('hidden');
+          btn.className = "px-4 py-2.5 rounded-t-xl font-semibold text-xs sm:text-sm text-gray-400 hover:text-white flex items-center gap-2 transition";
+        }
+      });
+
+      if (tabId === 'map') {
+        setTimeout(() => {
+          if (map) map.invalidateSize();
+        }, 200);
+      }
+    }
+
+    // METRICS UPDATER
+    function updateMetrics() {
+      document.getElementById('metricFarmers').innerText = dbFarmers.length;
+      document.getElementById('metricInRisk').innerText = dbFarmers.filter(f => f.status === 'IN_FIELD').length;
+      document.getElementById('metricAlerts').innerText = dbBroadcasts.length;
+      
+      const totalDispatches = dbBroadcasts.reduce((acc, curr) => acc + (curr.count || 100), 0);
+      document.getElementById('metricDispatches').innerText = totalDispatches;
+      document.getElementById('metricSos').innerText = dbSos.filter(s => s.status === 'PENDING').length;
+
+      // LocalStorage Sync
+      localStorage.setItem('agri_farmers', JSON.stringify(dbFarmers));
+      localStorage.setItem('agri_shelters', JSON.stringify(dbShelters));
+      localStorage.setItem('agri_broadcasts', JSON.stringify(dbBroadcasts));
+      localStorage.setItem('agri_sos', JSON.stringify(dbSos));
+    }
+
+    // SIMULATION TRIGGERS
+    function triggerSimulation(type) {
+      if (type === 'UP_LIGHTNING') {
+        flyToLocation(25.31, 82.97, 11, 'Varanasi Hazard Zone');
+        showToast("⚡ LIGHTNING HAZARD ALERT Triggered for UP Belt!");
+        logSql(`INSERT INTO hazard_logs (hazard_type, region, severity) VALUES ('LIGHTNING', 'UP', 'CRITICAL');`);
+      } else if (type === 'GHATAL_FLOOD') {
+        flyToLocation(22.67, 87.72, 12, 'Ghatal Flood Belt');
+        showToast("🌊 GHATAL FLOOD WARNING: Water Level +2.4m!");
+        logSql(`UPDATE sensors SET status='FLOOD_WARNING' WHERE district='Ghatal';`);
+      } else if (type === 'BANKURA_STRIKE') {
+        flyToLocation(23.23, 87.07, 12, 'Bankura Ground Charge Zone');
+        showToast("⚡ BANKURA STRIKE DETECTED: Ground Charge Extreme!");
+        logSql(`INSERT INTO hazard_logs (hazard_type, region, severity) VALUES ('STRIKE', 'Bankura', 'RED');`);
+      }
+      if (isSirenOn) playSirenSound();
+      updateMetrics();
+    }
+
+    // FARMER DBMS ACTIONS
+    function renderFarmerTable() {
+      const query = document.getElementById('farmerSearch').value.toLowerCase();
+      const tbody = document.getElementById('farmerTableBody');
+      tbody.innerHTML = '';
+
+      const filtered = dbFarmers.filter(f => 
+        f.name.toLowerCase().includes(query) || 
+        f.phone.includes(query) || 
+        f.district.toLowerCase().includes(query)
+      );
+
+      filtered.forEach(f => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-cardDark/80 transition";
+        tr.innerHTML = `
+          <td class="p-3 font-mono font-bold text-gray-400">#${f.id}</td>
+          <td class="p-3 font-semibold text-white">${f.name}</td>
+          <td class="p-3 font-mono text-emerald-400">${f.phone}</td>
+          <td class="p-3 text-gray-300">${f.district}</td>
+          <td class="p-3 font-mono text-xs text-gray-400">${f.lat.toFixed(3)}, ${f.lng.toFixed(3)}</td>
+          <td class="p-3">
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${f.status === 'IN_FIELD' ? 'bg-amber-950 text-amber-400 border border-amber-800' : 'bg-emerald-950 text-emerald-400 border border-emerald-800'}">
+              ${f.status}
+            </span>
+          </td>
+          <td class="p-3 text-gray-400">${f.lang}</td>
+          <td class="p-3 text-right">
+            <button onclick="flyToFarmer(${f.id})" class="text-cyan-400 hover:text-cyan-300 mr-2" title="Locate on Map">
+              <i class="fa-solid fa-location-crosshairs"></i>
+            </button>
+            <button onclick="deleteFarmer(${f.id})" class="text-red-400 hover:text-red-300 p-1" title="Delete Record">
+              <i class="fa-solid fa-trash-can"></i>
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function flyToFarmer(id) {
+      const farmer = dbFarmers.find(f => f.id === id);
+      if (farmer) {
+        switchTab('map');
+        flyToLocation(farmer.lat, farmer.lng, 14, `${farmer.name}'s Position`);
+      }
+    }
+
+    function openRegisterModal() {
+      document.getElementById('farmerModal').classList.remove('hidden');
+    }
+
+    function closeRegisterModal() {
+      document.getElementById('farmerModal').classList.add('hidden');
+    }
+
+    function saveFarmer(e) {
+      e.preventDefault();
+      const name = document.getElementById('mName').value;
+      const phone = document.getElementById('mPhone').value;
+      const district = document.getElementById('mDistrict').value;
+      const lang = document.getElementById('mLang').value;
+      const status = document.getElementById('mStatus').value;
+
+      // Coordinate presets based on district
+      let baseLat = 23.23, baseLng = 87.07;
+      if (district === 'Ghatal') { baseLat = 22.67; baseLng = 87.72; }
+      else if (district === 'Malda') { baseLat = 25.01; baseLng = 88.14; }
+      else if (district === 'Varanasi') { baseLat = 25.31; baseLng = 82.97; }
+      else if (district === 'Sundarbans') { baseLat = 21.94; baseLng = 88.89; }
+
+      const newFarmer = {
+        id: Math.floor(100 + Math.random() * 900),
+        name,
+        phone,
+        district,
+        status,
+        lang,
+        lat: baseLat + (Math.random() - 0.5) * 0.04,
+        lng: baseLng + (Math.random() - 0.5) * 0.04,
+        routeIndex: status === 'IN_FIELD' ? Math.floor(Math.random() * 3) : -1
+      };
+
+      dbFarmers.unshift(newFarmer);
+      publishSharedCollection('farmers', dbFarmers);
+      logSql(`INSERT INTO farmers (name, phone, district, status, language, lat, lng) VALUES ('${name}', '${phone}', '${district}', '${status}', '${lang}', ${newFarmer.lat}, ${newFarmer.lng});`);
+      
+      closeRegisterModal();
+      renderFarmerTable();
+      renderMapLayers();
+      updateMetrics();
+      showToast(`🧑‍🌾 Farmer ${name} registered in MySQL DB & Map!`);
+      document.getElementById('farmerForm').reset();
+    }
+
+    function deleteFarmer(id) {
+      dbFarmers = dbFarmers.filter(f => f.id !== id);
+      publishSharedCollection('farmers', dbFarmers);
+      logSql(`DELETE FROM farmers WHERE farmer_id=${id};`);
+      renderFarmerTable();
+      renderMapLayers();
+      updateMetrics();
+      showToast(`🗑️ Record #${id} deleted from database.`);
+    }
+
+    // BROADCAST ALERTS DISPATCH
+    function dispatchMassAlert() {
+      const dist = document.getElementById('broadcastDistrict').value;
+      const sev = document.getElementById('broadcastSeverity').value;
+      const msg = document.getElementById('broadcastMessage').value;
+
+      const newBroadcast = {
+        id: dbBroadcasts.length + 1,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        district: dist,
+        message: `[${sev}] ${msg}`,
+        count: dist === 'ALL' ? dbFarmers.length * 50 : 180
+      };
+
+      dbBroadcasts.unshift(newBroadcast);
+      publishSharedCollection('broadcasts', dbBroadcasts);
+      logSql(`INSERT INTO alert_broadcasts (target_district, severity, message_body) VALUES ('${dist}', '${sev}', '${msg.substring(0, 30)}...');`);
+      
+      renderBroadcastLogs();
+      updateMetrics();
+      showToast(`📢 Mass Dispatch sent to ${newBroadcast.count} farmers via Twilio!`);
+    }
+
+    function renderBroadcastLogs() {
+      const container = document.getElementById('broadcastLogs');
+      container.innerHTML = '';
+      dbBroadcasts.forEach(b => {
+        const div = document.createElement('div');
+        div.className = "p-2 rounded bg-cardDark/90 border border-cardBorder space-y-1";
+        div.innerHTML = `
+          <div class="flex justify-between text-gray-400">
+            <span class="text-emerald-400 font-bold">${b.time}</span>
+            <span class="text-amber-400">${b.district} Sector</span>
+          </div>
+          <div class="text-gray-200">${b.message}</div>
+          <div class="text-[10px] text-cyan-400">Recipient Farmers Reached: ${b.count || 120} SMS/Calls</div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    // SOS HUB FUNCTIONS
+    function triggerSOS() {
+      const randomFarmer = dbFarmers[Math.floor(Math.random() * dbFarmers.length)];
+      const newSos = {
+        id: Math.floor(500 + Math.random() * 500),
+        name: randomFarmer ? randomFarmer.name : "Unknown Farmer",
+        location: randomFarmer ? `${randomFarmer.district} Sector` : "Ghatal Sector 2",
+        phone: randomFarmer ? randomFarmer.phone : "9830000000",
+        status: "PENDING",
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      dbSos.unshift(newSos);
+      publishSharedCollection('sos', dbSos);
+      logSql(`INSERT INTO sos_requests (farmer_name, location, status) VALUES ('${newSos.name}', '${newSos.location}', 'PENDING');`);
+      renderSosHub();
+      updateMetrics();
+      showToast(`🚨 SOS DISTRESS RECEIVED from ${newSos.name}!`);
+      if (isSirenOn) playSirenSound();
+    }
+
+    function resolveSos(id) {
+      dbSos = dbSos.map(s => s.id === id ? { ...s, status: 'RESOLVED' } : s);
+      publishSharedCollection('sos', dbSos);
+      logSql(`UPDATE sos_requests SET status='RESOLVED' WHERE sos_id=${id};`);
+      renderSosHub();
+      updateMetrics();
+      showToast(`✅ SOS Rescue Team Dispatched for #${id}`);
+    }
+
+    function renderSosHub() {
+      const container = document.getElementById('sosContainer');
+      container.innerHTML = '';
+
+      dbSos.forEach(s => {
+        const div = document.createElement('div');
+        div.className = `p-3.5 rounded-xl border flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 ${s.status === 'PENDING' ? 'bg-red-950/40 border-red-700/60 glow-red' : 'bg-cardDark border-cardBorder'}`;
+        div.innerHTML = `
+          <div class="space-y-0.5">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-white text-sm">${s.name}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold ${s.status === 'PENDING' ? 'bg-red-900 text-red-200 animate-pulse' : 'bg-emerald-950 text-emerald-300'}">${s.status}</span>
+            </div>
+            <div class="text-xs text-gray-300 font-mono">📍 ${s.location} | 📞 ${s.phone}</div>
+            <div class="text-[10px] text-gray-500">Timestamp: ${s.time}</div>
+          </div>
+
+          ${s.status === 'PENDING' ? `
+            <button onclick="resolveSos(${s.id})" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs whitespace-nowrap">
+              🚑 Dispatch Rescue / Safe Shelter
+            </button>
+          ` : `
+            <span class="text-xs text-emerald-400 font-bold flex items-center gap-1">
+              <i class="fa-solid fa-circle-check"></i> Rescue Dispatched
+            </span>
+          `}
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    // SHELTERS RENDERER
+    function renderShelters() {
+      const container = document.getElementById('shelterGrid');
+      container.innerHTML = '';
+
+      dbShelters.forEach(s => {
+        const pct = Math.round((s.occupancy / s.capacity) * 100);
+        const div = document.createElement('div');
+        div.className = "bg-brandDark/80 p-4 rounded-xl border border-cardBorder space-y-3";
+        div.innerHTML = `
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-emerald-400">ID #SH-${s.id}</span>
+            <span class="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-full font-mono">${s.district}</span>
+          </div>
+          <div class="text-sm font-bold text-gray-200">${s.name}</div>
+          
+          <div class="space-y-1">
+            <div class="flex justify-between text-xs text-gray-400">
+              <span>Occupancy</span>
+              <span class="font-bold text-white">${s.occupancy} / ${s.capacity}</span>
+            </div>
+            <div class="w-full bg-cardDark rounded-full h-2 overflow-hidden border border-cardBorder">
+              <div class="bg-emerald-500 h-full rounded-full" style="width: ${pct}%"></div>
+            </div>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    // SQL AUDIT LOGGING
+    function logSql(query) {
+      const container = document.getElementById('sqlAuditLog');
+      const time = new Date().toLocaleTimeString();
+      const div = document.createElement('div');
+      div.innerHTML = `<span class="text-gray-500">[${time}]</span> <span class="text-yellow-400">${query}</span>`;
+      container.prepend(div);
+    }
+
+    // UTILITY: TOAST NOTIFICATIONS
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastMsg').innerText = msg;
+      toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+      
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+      }, 3000);
+    }
+
+    // MOBILE NAV TOGGLE
+    function toggleMobileNav() {
+      const nav = document.getElementById('tabNav');
+      nav.classList.toggle('flex-col');
+    }
+
+    // INITIALIZATION ON LOAD
+    window.onload = function() {
+      initMap();
+      renderFarmerTable();
+      renderBroadcastLogs();
+      renderShelters();
+      renderSosHub();
+      updateMetrics();
+      startSharedDatabase();
+    };
+  </script>
+</body>
+</html>
